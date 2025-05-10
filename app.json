@@ -2,6 +2,11 @@
   "expo": {
     "name": "StudentInformation",
     "slug": "StudentInformation",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "dfdd407a-08ec-48c5-942e-43e51b12f731"
+      }
+    }
   }
 }
