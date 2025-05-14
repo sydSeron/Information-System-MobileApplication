@@ -15,8 +15,11 @@ export default function GradesScreen({ navigation }) {
     name: '',
     professor: '',
     grade: '',
-    type: 'Midterm'
+    type: 'Midterm',
+    semester: 'current'
   });
+  const [currentSemesterGrades, setCurrentSemesterGrades] = useState([]);
+  const [previousSemesterGrades, setPreviousSemesterGrades] = useState([]);
 
   useEffect(() => {
     loadGrades();
@@ -24,13 +27,32 @@ export default function GradesScreen({ navigation }) {
 
   useEffect(() => {
     calculateGPA();
-  }, [grades]);
+  }, [grades, activeSemester]);
+
+  // Add this effect to recalculate GPA when active semester changes
+  useEffect(() => {
+    calculateGPA();
+  }, [activeSemester, grades]);
 
   const loadGrades = async () => {
     try {
-      const storedGrades = await AsyncStorage.getItem('gradesData');
+      // Get student ID from profile data
+      const profileData = await AsyncStorage.getItem('profileData');
+      const profile = profileData ? JSON.parse(profileData) : {};
+      const studentId = profile.studentId;
+      
+      if (!studentId) {
+        console.error('No student ID found');
+        return;
+      }
+      
+      // Load student-specific grades
+      const studentGradesKey = `grades_${studentId}`;
+      const storedGrades = await AsyncStorage.getItem(studentGradesKey);
+      
       if (storedGrades) {
-        setGrades(JSON.parse(storedGrades));
+        const parsedGrades = JSON.parse(storedGrades);
+        setGrades(parsedGrades);
       }
     } catch (error) {
       console.error('Error loading grades:', error);
@@ -39,10 +61,23 @@ export default function GradesScreen({ navigation }) {
 
   const saveGrades = async (updatedGrades) => {
     try {
-      await AsyncStorage.setItem('gradesData', JSON.stringify(updatedGrades));
+      // Get student ID from profile data
+      const profileData = await AsyncStorage.getItem('profileData');
+      const profile = profileData ? JSON.parse(profileData) : {};
+      const studentId = profile.studentId;
+      
+      if (!studentId) {
+        Alert.alert('Error', 'Could not determine student ID');
+        return;
+      }
+      
+      // Save to student-specific storage
+      const studentGradesKey = `grades_${studentId}`;
+      await AsyncStorage.setItem(studentGradesKey, JSON.stringify(updatedGrades));
       setGrades(updatedGrades);
     } catch (error) {
       console.error('Error saving grades:', error);
+      Alert.alert('Error', 'Failed to save grades');
     }
   };
 
@@ -60,8 +95,9 @@ export default function GradesScreen({ navigation }) {
 
     const updatedGrades = [...grades, {
       ...newGrade,
-      id: Date.now(),
-      grade: gradeNumber
+      id: String(Date.now()), // Convert to string for consistency
+      grade: gradeNumber,
+      semester: 'current'
     }];
     
     saveGrades(updatedGrades);
@@ -71,25 +107,48 @@ export default function GradesScreen({ navigation }) {
       name: '',
       professor: '',
       grade: '',
-      type: 'Midterm'
+      type: 'Midterm',
+      semester: 'current'
     });
   };
 
   const handleDeleteGrade = (id) => {
+    // Ensure id is a string for consistent comparison
+    const targetId = String(id);
+    
     Alert.alert(
       'Delete Grade',
       'Are you sure you want to delete this grade?',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            const updatedGrades = grades.filter(grade => grade.id !== id);
-            saveGrades(updatedGrades);
+          onPress: async () => {
+            try {
+              // Create a new array without the grade to delete
+              const updatedGrades = grades.filter(grade => 
+                String(grade.id) !== targetId
+              );
+              
+              // Check if any grade was removed
+              if (grades.length === updatedGrades.length) {
+                Alert.alert('Warning', 'The grade could not be found.');
+                return;
+              }
+              
+              // Save the updated grades
+              await saveGrades(updatedGrades);
+              
+              // Force a refresh of the UI (setting state directly)
+              setGrades(updatedGrades);
+              
+              // Show success message (optional)
+              Alert.alert('Success', 'Grade deleted successfully');
+            } catch (error) {
+              console.error('Error deleting grade:', error);
+              Alert.alert('Error', 'Failed to delete grade');
+            }
           }
         }
       ]
@@ -97,13 +156,61 @@ export default function GradesScreen({ navigation }) {
   };
 
   const calculateGPA = () => {
-    if (grades.length === 0) {
+    // Get only the grades that should be considered based on active semester
+    const gradesToCalculate = getFilteredGrades();
+    
+    if (gradesToCalculate.length === 0) {
       setGpa(0);
       return;
     }
-    const total = grades.reduce((sum, subject) => sum + subject.grade, 0);
-    const average = total / grades.length;
-    setGpa(average);
+    
+    const total = gradesToCalculate.reduce((sum, subject) => sum + parseFloat(subject.grade), 0);
+    const average = total / gradesToCalculate.length;
+    
+    // Make sure we're dealing with a valid number
+    setGpa(isNaN(average) ? 0 : average);
+  };
+
+  const markSemesterAsDone = async () => {
+    try {
+      // Get current grades marked as current semester
+      const currentGrades = grades.filter(grade => grade.semester === 'current');
+      
+      if (currentGrades.length === 0) {
+        Alert.alert('No Grades', 'There are no current semester grades to archive.');
+        return;
+      }
+      
+      // Update all current grades to previous semester
+      const updatedGrades = grades.map(grade => {
+        if (grade.semester === 'current') {
+          return { ...grade, semester: 'previous' };
+        }
+        return grade;
+      });
+      
+      // Save the updated grades
+      await saveGrades(updatedGrades);
+      
+      // Update state
+      setGrades(updatedGrades);
+      Alert.alert('Success', 'Current semester grades moved to previous semester.');
+    } catch (error) {
+      console.error('Error marking semester as done:', error);
+      Alert.alert('Error', 'Failed to archive semester grades');
+    }
+  };
+
+  const getFilteredGrades = () => {
+    switch (activeSemester) {
+      case 'Current Semester':
+        return grades.filter(grade => grade.semester === 'current');
+      case 'Previous Semester':
+        return grades.filter(grade => grade.semester === 'previous');
+      case 'All Semesters':
+      default:
+        return grades;
+    }
   };
 
   const getGradeColor = (grade) => {
@@ -157,7 +264,18 @@ export default function GradesScreen({ navigation }) {
         ))}
       </ScrollView>
 
-      {grades.map((subject, index) => (
+      <View style={styles.semesterActionContainer}>
+        {activeSemester === 'Current Semester' && (
+          <TouchableOpacity 
+            style={styles.semesterDoneButton} 
+            onPress={markSemesterAsDone}
+          >
+            <Text style={styles.semesterDoneButtonText}>Mark Semester as Done</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {getFilteredGrades().map((subject, index) => (
         <TouchableOpacity key={subject.id || index} style={styles.subjectItem}>
           <View style={styles.subjectHeader}>
             <View style={styles.subjectInfo}>
@@ -180,12 +298,14 @@ export default function GradesScreen({ navigation }) {
         </TouchableOpacity>
       ))}
 
-      <TouchableOpacity 
-        style={styles.addButton} 
-        onPress={() => setModalVisible(true)}
-      >
-        <Text style={styles.addButtonText}>Add Grade</Text>
-      </TouchableOpacity>
+      {activeSemester === 'Current Semester' && (
+        <TouchableOpacity 
+          style={styles.addButton} 
+          onPress={() => setModalVisible(true)}
+        >
+          <Text style={styles.addButtonText}>Add Grade</Text>
+        </TouchableOpacity>
+      )}
 
       <Modal
         animationType="slide"
@@ -225,6 +345,34 @@ export default function GradesScreen({ navigation }) {
               keyboardType="numeric"
               placeholderTextColor="#666"
             />
+            <Text style={styles.label}>Exam Type</Text>
+            <View style={styles.examTypeContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.examTypeButton,
+                  newGrade.type === 'Midterm' && styles.selectedExamType
+                ]}
+                onPress={() => setNewGrade({ ...newGrade, type: 'Midterm' })}
+              >
+                <Text style={[
+                  styles.examTypeText,
+                  newGrade.type === 'Midterm' && styles.selectedExamTypeText
+                ]}>Midterm</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.examTypeButton,
+                  newGrade.type === 'Finals' && styles.selectedExamType
+                ]}
+                onPress={() => setNewGrade({ ...newGrade, type: 'Finals' })}
+              >
+                <Text style={[
+                  styles.examTypeText,
+                  newGrade.type === 'Finals' && styles.selectedExamTypeText
+                ]}>Finals</Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity style={styles.saveButton} onPress={handleAddGrade}>
               <Text style={styles.saveButtonText}>Save Grade</Text>
             </TouchableOpacity>
@@ -317,6 +465,22 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: '#fff',
   },
+  semesterActionContainer: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  semesterDoneButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    marginBottom: 10,
+  },
+  semesterDoneButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
   subjectItem: {
     padding: 15,
     marginHorizontal: 10,
@@ -404,6 +568,37 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     padding: 10,
     marginBottom: 10,
+  },
+  label: {
+    alignSelf: 'flex-start',
+    fontSize: 16,
+    marginBottom: 5,
+    color: '#333',
+  },
+  examTypeContainer: {
+    flexDirection: 'row',
+    width: '100%',
+    marginBottom: 15,
+    justifyContent: 'space-between',
+  },
+  examTypeButton: {
+    flex: 1,
+    padding: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginHorizontal: 5,
+    borderRadius: 5,
+  },
+  selectedExamType: {
+    backgroundColor: '#D75A4A',
+    borderColor: '#D75A4A',
+  },
+  examTypeText: {
+    color: '#666',
+  },
+  selectedExamTypeText: {
+    color: 'white',
   },
   saveButton: {
     backgroundColor: '#D75A4A',

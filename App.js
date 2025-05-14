@@ -13,6 +13,10 @@ import HomeworkScreen from './screens/HomeworkScreen';
 import GradesScreen from './screens/GradesScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import RegisterScreen from './screens/RegisterScreen';
+import AdminDashboard from './screens/AdminDashboard';
+import EditUser from './screens/EditUser';
+import ManageGrades from './screens/ManageGrades';
+import AddUser from './screens/AddUser';
 
 const Stack = createStackNavigator();
 
@@ -29,6 +33,10 @@ export default function App() {
           <Stack.Screen name="Homework" component={HomeworkScreen} />
           <Stack.Screen name="Grades" component={GradesScreen} />
           <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen name="AdminDashboard" component={AdminDashboard} options={{ headerShown: false }} />
+          <Stack.Screen name="EditUser" component={EditUser} options={{ headerShown: false }} />
+          <Stack.Screen name="ManageGrades" component={ManageGrades} options={{ headerShown: false }} />
+          <Stack.Screen name="AddUser" component={AddUser} options={{ headerShown: false }} />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>

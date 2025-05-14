@@ -23,6 +23,7 @@ export default function LoginScreen({ navigation }) {
       if (username === 'Admin123' && password === 'CCS2025') {
         await AsyncStorage.setItem('userToken', 'loggedIn');
         await AsyncStorage.setItem('userName', 'Administrator');
+        await AsyncStorage.setItem('userRole', 'admin'); // Add this line to store the role
         
         // Store admin profile data
         const adminProfileData = {
@@ -42,9 +43,10 @@ export default function LoginScreen({ navigation }) {
 
         await AsyncStorage.setItem('profileData', JSON.stringify(adminProfileData));
         
+        // Change this line to navigate to AdminDashboard instead of Dashboard
         navigation.reset({
           index: 0,
-          routes: [{ name: 'Dashboard' }],
+          routes: [{ name: 'AdminDashboard' }],
         });
         return;
       }
@@ -116,7 +118,7 @@ export default function LoginScreen({ navigation }) {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.goBack()}
+            onPress={() => navigation.navigate('Home')}
           >
             <Text style={styles.backButtonText}>⬅ Back</Text>
           </TouchableOpacity>

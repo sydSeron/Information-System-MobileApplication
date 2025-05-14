@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, ScrollView, Modal, TextInput } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Image, ScrollView, Modal, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -74,8 +74,41 @@ export default function ProfileScreen({ navigation, route }) {
       await AsyncStorage.setItem('profileData', JSON.stringify(updatedProfileData));
       setInfoModalVisible(false);
       await AsyncStorage.setItem('userName', profileData.fullName);
+      await saveProfileChanges();
     } catch (error) {
       console.error('Error saving profile data:', error);
+    }
+  };
+
+  const saveProfileChanges = async () => {
+    try {
+      // First save the profile data for the current session
+      await AsyncStorage.setItem('profileData', JSON.stringify(profileData));
+      
+      // Important: Also update the main student record so admin can see changes
+      const studentId = profileData.studentId;
+      if (studentId) {
+        // Get full student record first
+        const studentRecord = await AsyncStorage.getItem(studentId);
+        if (studentRecord) {
+          const fullData = JSON.parse(studentRecord);
+          
+          // Update with new profile data
+          const updatedData = {
+            ...fullData,
+            ...profileData,  // Override with updated profile data
+          };
+          
+          // Save back to the student record
+          await AsyncStorage.setItem(studentId, JSON.stringify(updatedData));
+        }
+      }
+      
+      // Show success message
+      Alert.alert('Success', 'Profile updated successfully');
+    } catch (error) {
+      console.error('Failed to save profile changes:', error);
+      Alert.alert('Error', 'Failed to update profile');
     }
   };
 
